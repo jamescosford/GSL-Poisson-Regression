@@ -1,9 +1,5 @@
 # Poisson Regression using GSL
 
-The current implementation of the rates calculator relies on the *R* statistics package for trend analysis. Interacting with the *R* server via files and scripts from the asynchronous *node.js* process is painful. A string of promises and expectations longer than any other single-function section of code in the whole tool is required, and then there is the requirement of having the *R* server installed on the deployment platform as well.
-
-The *compare rates* functionality requires access to various probability distribution functions and statistical tests, a requirement I filled using *node-ffi* and the GNU Scientific Library (*GSL*). Since then I have toyed with the idea of replacing the R dependency with further *GSL* integration, by implementing the Poisson Regression used for trend analysis in *C*, and using *FFI* from *node.js*.
-
 After quite a bit of reading on the subject, I had assembled a couple of key facts:
 
 1. Poisson regression is best performed using the *maximum-likelihood* method
