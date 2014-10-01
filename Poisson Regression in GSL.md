@@ -1,5 +1,9 @@
 # Poisson Regression using GSL
 
+The current implementation of the rates calculator relies on the *R* statistics package for trend analysis. Interacting with the *R* server via files and scripts from the asynchronous *node.js* process is painful. A string of promises and expectations longer than any other single-function section of code in the whole tool is required, and then there is the requirement of having the *R* server installed on the deployment platform as well.
+
+The *compare rates* functionality requires access to various probability distribution functions and statistical tests, a requirement I filled using *node-ffi* and the GNU Scientific Library (*GSL*). Since then I have toyed with the idea of replacing the R dependency with further *GSL* integration, by implementing the Poisson Regression used for trend analysis in *C*, and using *FFI* from *node.js*.
+
 After quite a bit of reading on the subject, I had assembled a couple of key facts:
 
 1. Poisson regression is best performed using the *maximum-likelihood* method
@@ -24,7 +28,9 @@ This is the log-linear Poisson regression model, where $\beta$ is a vector of un
 
 These can be further decomposed to
 
-$$\mu_i = e^{\beta_0 x_{i,0}}\cdot e^{\beta_1 x_{i,1}}\cdot ... \cdot e^{\beta_n x_{i,n}} \text{, or} \\ log(\mu_i) = \beta_0 x_{i,0} + \beta_1 x_{i,1} + ... + \beta_n x_{i,n}$$
+$$
+\mu_i = e^{\beta_0 x_{i,0}}\cdot e^{\beta_1 x_{i,1}}\cdot ... \cdot e^{\beta_n x_{i,n}} \text{, or} \\ log(\mu_i) = \beta_0 x_{i,0} + \beta_1 x_{i,1} + ... + \beta_n x_{i,n}
+$$
 
 The maximum likelihood model is used to determine the coefficient vector $\beta$ which maximises the likelihood of the observed data $\mathbf{y}$ occurring, given the explanatory variables $\mathbf{x}$.
 
@@ -35,7 +41,7 @@ The maximum likelihood model is used to determine the coefficient vector $\beta$
 The likelihood function is the product of all individual likelihood contributions across $i = 1,2,...,l$, where $l$ is the number of observations. This relies on the assumption that all measurements are independent.
 
 $$
-\mathcal{L}_i = \frac{\mu_i^{y_i} \cdot e^{-\mu_i}}{y_i!} \\ 
+\mathcal{L}_i = \frac{\mu_i^{y_i} \cdot e^{-\mu_i}}{y_i!} \\
 \mathcal{L} = \prod_{i=1}^l{\mathcal{L}_i}
 $$ 
 
@@ -84,7 +90,8 @@ $$
 \begin{align}
 \ell &= \sum_{i=1}^{l} y_i log (t_i \mu_i) - t_i \mu_i - log(y_i!) \\
 &=\sum_{i=1}^{l} y_i \left(log(t_i) + log(e^{\beta\prime x_i})\right) + t_i e^{\beta\prime x_i} \\
-&=\sum_{i=1}^{l} y_i \left(log(t_i) + \beta\prime x_i\right) + t_i e^{\beta\prime x_i}  \text{ or } \sum_{i=1}^{l} y_i \left(\log(t_i) + \beta\prime x_i\right) + e^{log t_i + \beta\prime x_i} \text{,}
+&=\sum_{i=1}^{l} y_i \left(log(t_i) + \beta\prime x_i\right) + t_i e^{\beta\prime x_i} \\ 
+& \text{ or } \sum_{i=1}^{l} y_i \left(\log(t_i) + \beta\prime x_i\right) + e^{log t_i + \beta\prime x_i} \text{,}
 \end{align}
 $$
 
@@ -253,6 +260,7 @@ int main(int argc, char** argv) {
 		{130, 1, 1}
 	};
 	
+	// fill out our vectors and arrays with test data
 	for (int i = 0; i < l; i++) {
 		// Constant
 		gsl_matrix_set(xis, i, 0, 1.0); 
@@ -264,18 +272,22 @@ int main(int argc, char** argv) {
 		gsl_vector_set(yis, i, data_src[i][2]); 
 	}
 
+	// assign to param struct
 	p.xis = xis;
 	p.yis = yis;
 	p.ois = ois;
 	p.n = n;
 	p.l = l;
 
+	// invoke regression function
 	poisson_reg(&p);
 	
+	// free up resources
 	gsl_vector_free(ois);
 	gsl_vector_free(yis);
 	gsl_matrix_free(xis);
 }
+
 ```
 ### The poisson regression function
 ```
@@ -296,6 +308,7 @@ void poisson_reg(struct ps * p) {
 	// all zeros starting estimate
 	gsl_vector_set_all(beta, 0.); 
 
+	// create and initialise the minimiser
 	const gsl_multimin_fdfminimizer_type *T;
 	gsl_multimin_fdfminimizer* s;
 	T = gsl_multimin_fdfminimizer_conjugate_fr;
