@@ -1,7 +1,8 @@
 GSL-Poisson-Regression
 ======================
 
-Tutorial/Demonstration of performing Poisson Regression using the GNU Scientific Library
+Demonstrates poisson regression using the GNU Scientific Library.
 
-The document is written using markdown, with heavy use of embedded MathJax. 
-To view easily, grab it and dump it into Stackedit.
+The "Poisson Regression with GSL" document is written using markdown, with heavy use of embedded MathJax. 
+
+To view it easily, grab it and dump it into Stackedit.
