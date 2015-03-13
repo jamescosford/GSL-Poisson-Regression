@@ -1,9 +1,5 @@
 # Poisson Regression using GSL
 
-The current implementation of the rates calculator relies on the *R* statistics package for trend analysis. Interacting with the *R* server via files and scripts from the asynchronous *node.js* process is painful. A string of promises and expectations longer than any other single-function section of code in the whole tool is required, and then there is the requirement of having the *R* server installed on the deployment platform as well.
-
-The *compare rates* functionality requires access to various probability distribution functions and statistical tests, a requirement I filled using *node-ffi* and the GNU Scientific Library (*GSL*). Since then I have toyed with the idea of replacing the R dependency with further *GSL* integration, by implementing the Poisson Regression used for trend analysis in *C*, and using *FFI* from *node.js*.
-
 After quite a bit of reading on the subject, I had assembled a number of key facts:
 
 1. Poisson regression is best performed using the *maximum-likelihood* method
@@ -17,7 +13,7 @@ After quite a bit of reading on the subject, I had assembled a number of key fac
 
 A discrete random variable $X$ is said to have a Poisson distribution with parameter $\mu \gt 0$, if for $y_i=0,1,2,...,$ the probability mass function of $X$ is given by:
 
-$f(y; \mu) = Pr(X = y) = \frac{\mu^{y} e^{-\mu}}{y!}$, $\mu = E(X) = Var(X)$ , which says "The probability that the observed value is equal to the mean value is given by... that function" 
+$f(y; \mu) = Pr(X = y) = \frac{\mu^{y} e^{-\mu}}{y!}$, $\mu = E(X) = Var(X)$ , which says "The probability that the observed value is equal to the mean value is given by... that function"
 
 Poission regression employs the following model:
 
@@ -39,23 +35,23 @@ The likelihood function is the product of all individual likelihood contribution
 
 $\mathcal{L}_i = \frac{\mu_i^{y_i} \cdot e^{-\mu_i}}{y_i!}$, $\mathcal{L} = \prod_{i=1}^l{\mathcal{L}_i}$, Where $\prod_{i=1}^l{\mathcal{L}_i}$ is the multiplicative product $\mathcal{L}_1 \cdot \mathcal{L}_2 \cdot ... \cdot \mathcal{L}_l$
 
-While it is possible to work with the raw likelihood function as above, it has been determined that choosing to work instead with the log of the likelihood function is preferable, as it is easier to work with both mathematically and computationally. 
+While it is possible to work with the raw likelihood function as above, it has been determined that choosing to work instead with the log of the likelihood function is preferable, as it is easier to work with both mathematically and computationally.
 
 The log-likelihood $ll = log(\mathcal{L})$
 
 $ll = \sum_{i=1}^{l} y_i log (\mu_i) - \mu_i - log(y_i!)$
 
-Remembering that we are attempting to determine the set of coefficients $\beta$ which maximises the (log)likelihood function given our observed data and explanatory variables, we can eliminate the factorial expression on the end as this does not depend on $\beta$. 
+Remembering that we are attempting to determine the set of coefficients $\beta$ which maximises the (log)likelihood function given our observed data and explanatory variables, we can eliminate the factorial expression on the end as this does not depend on $\beta$.
 
 Substituting our modeled value for $\mu$ we arrive at:
 
 $ll = \sum_{i=1}^{l} y_i log(e^{\beta\prime \mathbf{x}_i}) - e^{\beta\prime \mathbf{x}_i}$
 
-which resolves to 
+which resolves to
 
 $ll = \sum_{i=1}^{l} y_i {\beta\prime \mathbf{x}_i} - e^{\beta\prime \mathbf{x}_i}$
 
-This is the function which we are attempting to maximise, to determine the most likely value(s) of $\beta$. 
+This is the function which we are attempting to maximise, to determine the most likely value(s) of $\beta$.
 
 To assist in the maximisation, it is necessary to construct a *score* vector, which is a vector of length $n$ (the same dimension as $\beta$) containing the evaluated partial derivative for each parameter if $\beta$. This requires partial differentiation of the $ll$ function with respect to each member of $\beta$.
 
@@ -64,7 +60,7 @@ $\frac{\delta ll(\beta)}{\delta\beta} = \sum_{i=1}^l x_{i,j} y_i - e^{\beta\prim
 $= \sum_{i=1}^l x_{i,j}(y_i - e^{\beta\prime \mathbf{x}_i})$ for the $j$th member of $\beta$.
 
 ### Including exposure
-Modeling rare occurrences with Poisson regression may involve inclusions of observation data with varying levels of "exposure". Consider for example a rare infectious disease being modeled among a number of population sub-groups. In a sub-group with more members, there are more people at risk of infection, even though the probability of infection may be similar between groups. A naive model might conclude that the risk was not constant, but higher among larger sub-groups, which may be incorrect. To account for exposure ($t$), we express the model slightly differently. 
+Modeling rare occurrences with Poisson regression may involve inclusions of observation data with varying levels of "exposure". Consider for example a rare infectious disease being modeled among a number of population sub-groups. In a sub-group with more members, there are more people at risk of infection, even though the probability of infection may be similar between groups. A naive model might conclude that the risk was not constant, but higher among larger sub-groups, which may be incorrect. To account for exposure ($t$), we express the model slightly differently.
 
 $\mu = t_i e^{\beta_i\prime x_i} $
 
@@ -121,9 +117,9 @@ double pois_ll_f(const gsl_vector* beta, void* params) {
 	double res_bx;
 	double yi = 0;
 	double oi = 0;
-	
+
 	gsl_vector* xi = gsl_vector_alloc(p->n);
-	for (int i = 0; i < p->l; i++) {	
+	for (int i = 0; i < p->l; i++) {
 		yi = gsl_vector_get(p->yis, i); // Observed
 		oi = gsl_vector_get(p->ois, i); // Exposure/Offset
 		gsl_matrix_get_row(xi, p->xis, i); 	// Get explanatory vector x_i
@@ -152,11 +148,11 @@ void pois_ll_df(const gsl_vector* beta, void* params, gsl_vector* g) {
 		for (int i = 0; i < p->l; i++) {
 			gsl_matrix_get_row(xi, p->xis, i);	// x_i
 			gsl_blas_ddot(beta, xi, &res_bx);	// beta (dot) x_i
-			
+
 			double yi = gsl_vector_get(p->yis, i);	// y_i
 			double oi = gsl_vector_get(p->ois, i);	// offset_i
 			double xij = gsl_vector_get(xi, j);		// x[j][i]
-			
+
 			dbi += xij*(yi - exp(oi + res_bx));	// Calc dll/dtheta_j _i
 		}
 		gsl_vector_set(g, j, -dbi);	// Set negative gradient value (minimisation)
@@ -184,9 +180,9 @@ Parameter struct - this can contain whatever you need it to contain for your giv
 struct ps {
 	size_t n; // problem dimension
 	size_t l; // number of observations
-	
+
 	gsl_matrix* xis; // explanatory variables + constant term
-	gsl_vector* yis; // observed values 
+	gsl_vector* yis; // observed values
 	gsl_vector* ois; // offset / exposure values (logged) (zeros if n.a.)
 };
 ```
@@ -209,7 +205,7 @@ int main(int argc, char** argv) {
 		{48, 1, 0},	{49, 1, 0},	{50, 10, 2},{52, 1, 0},	{59, 1, 0},	{60, 5, 2},	{65, 6, 6},	{68, 3, 3},
 		{70, 5, 3},	{79, 1, 0},	{80, 1, 0},	{84, 1, 0},	{94, 1, 0},	{120, 6, 6},{130, 1, 1}
 	};
-	
+
 	for (int i = 0; i < l; i++) {
 		gsl_matrix_set(xis, i, 0, 1.0); // Constant
 		gsl_matrix_set(xis, i, 1, data_src[i][0]); // income
@@ -226,7 +222,7 @@ int main(int argc, char** argv) {
 	p.l = l;
 
 	poisson_reg(&p);
-	
+
 	gsl_vector_free(ois);
 	gsl_vector_free(yis);
 	gsl_matrix_free(xis);
@@ -242,7 +238,7 @@ void poisson_reg(struct ps * p) {
 	my_func.f = pois_ll_f; // poisson f function
 	my_func.df = pois_ll_df; // poisson df function
 	my_func.fdf = pois_ll_fdf; // poisson fdf function
-	my_func.params = p; // params 
+	my_func.params = p; // params
 
 	// Parameter vector beta - GSL will modify this to produce a minimum
 	gsl_vector* beta = gsl_vector_alloc(p->n);
@@ -252,14 +248,14 @@ void poisson_reg(struct ps * p) {
 	gsl_multimin_fdfminimizer* s;
 	T = gsl_multimin_fdfminimizer_conjugate_fr;
 	s = gsl_multimin_fdfminimizer_alloc(T, p->n);
-	
+
 	gsl_multimin_fdfminimizer_set(s, &my_func, beta, 0.01, 0.1);
 
 	int status;
 	size_t iter = 0;
 	do {
 		iter++;
-		
+
 		status = gsl_multimin_fdfminimizer_iterate(s);
         // A GSL example checks the status here for error conditions, but this lead to early
         // termination of minimisations which complete successfully due to the gradient
@@ -268,11 +264,11 @@ void poisson_reg(struct ps * p) {
 	} while (status == GSL_CONTINUE && iter < 1000);
 
 	// Calculate standard errors
-	gsl_vector* ses = gsl_vector_alloc(p->n);	
-	calc_ses(s->x, p, ses); 
+	gsl_vector* ses = gsl_vector_alloc(p->n);
+	calc_ses(s->x, p, ses);
 
 	printf("\nGoodness of fit:\n");
-	printf("Log-likelihood: %.4f\n", -s->f);	
+	printf("Log-likelihood: %.4f\n", -s->f);
 	double deviance = calc_deviance(s->x, p);
 	printf("Deviance: %.4f\n", deviance);
 	double pearson = calc_pearson_chi2(s->x, p);
@@ -310,9 +306,9 @@ void poisson_reg(struct ps * p) {
 }
 ```
 ### Calculating standard error of estimates
-While there appear to be as many ways to do this as to skin a proverbial cat, I will present one implementation which gets appropriate results according to the example linked above. The standard errors associated with each estimate can be approximated as the square root of the diagonal elements of the inverted fisher information matrix of the problem. 
+While there appear to be as many ways to do this as to skin a proverbial cat, I will present one implementation which gets appropriate results according to the example linked above. The standard errors associated with each estimate can be approximated as the square root of the diagonal elements of the inverted fisher information matrix of the problem.
 
-The fisher information matrix is the negative of the hessian matrix of the problem, which is the matrix of second-order partial differentials of our log-likelihood function with respect to each parameter of our parameter vector $\beta$. 
+The fisher information matrix is the negative of the hessian matrix of the problem, which is the matrix of second-order partial differentials of our log-likelihood function with respect to each parameter of our parameter vector $\beta$.
 
 |$\frac{\delta^2\beta}{\delta\beta_i\beta_j}$|$\beta_0$|$\beta_1$|...|$\beta_n$|
 |:-|:-|:-|:-|:-|
@@ -331,7 +327,7 @@ void calc_ses(const gsl_vector* beta, void* params, gsl_vector* ses) {
 	double res_bx;
 	gsl_matrix* h = gsl_matrix_calloc(p->n, p->n);
 	gsl_vector* xi = gsl_vector_alloc(p->n);
-	
+
 	// Generate negative Hessian matrix (Fisher Information matrix)
 	for (int k = 0; k < p->n; k++) {
 		for (int j = 0; j < p->n; j++) {
@@ -348,7 +344,7 @@ void calc_ses(const gsl_vector* beta, void* params, gsl_vector* ses) {
 			gsl_matrix_set(h,k,j,d2f);
 		}
 	}
-	
+
 	// Invert it
 	gsl_matrix* inverse = gsl_matrix_calloc(p->n, p->n);
 	gsl_permutation* perm = gsl_permutation_alloc(p->n);
@@ -360,11 +356,11 @@ void calc_ses(const gsl_vector* beta, void* params, gsl_vector* ses) {
 	for (int k = 0; k < p->n; k++) {
 		gsl_vector_set(ses, k, sqrt(gsl_matrix_get(inverse, k,k)));
 	}
-	
+
 	gsl_permutation_free(perm);
 	gsl_matrix_free(inverse);
 	gsl_vector_free(xi);
-	gsl_matrix_free(h);	
+	gsl_matrix_free(h);
 }
 
 ```
@@ -390,19 +386,19 @@ Which compares very well with the presented results from SAS in the example link
 ![SAS Output for Comparison][1]
 
 ## Conclusion
-I have run multiple tests against output from R and SAS, and the results are solid. It's not necessarily tidy, or optimised and is by no means perfect, but this document would have really helped me when I was trying to build this stuff, so take it in the spirit in which it is given. 
+I have run multiple tests against output from R and SAS, and the results are solid. It's not necessarily tidy, or optimised and is by no means perfect, but this document would have really helped me when I was trying to build this stuff, so take it in the spirit in which it is given.
 
 ### Other stats
-Included in the output are a number of other statistics which are calculated to characterise goodness of fit and the value of the parameters which have been determined. I'm no expert on any of this, and while some of these make a certain kind of sense I don't have the time to go into much detail. There are plenty of references around so if you need to you can find them. 
+Included in the output are a number of other statistics which are calculated to characterise goodness of fit and the value of the parameters which have been determined. I'm no expert on any of this, and while some of these make a certain kind of sense I don't have the time to go into much detail. There are plenty of references around so if you need to you can find them.
 ```
-double calc_deviance(const gsl_vector* beta, void* params) {	
+double calc_deviance(const gsl_vector* beta, void* params) {
 	struct ps* p = (struct ps*)params;
 	double d = 0;
 	double beta_xi;
 	double yi = 0;
-	
+
 	gsl_vector* xi = gsl_vector_alloc(p->n);
-	for (int i = 0; i < p->l; i++) {	
+	for (int i = 0; i < p->l; i++) {
 		yi = gsl_vector_get(p->yis, i);
 		gsl_matrix_get_row(xi, p->xis, i);
 		gsl_blas_ddot(beta, xi, &beta_xi);
@@ -414,11 +410,11 @@ double calc_deviance(const gsl_vector* beta, void* params) {
 		} else {
 			ddelta = m_i;
 		}
-		
+
 		d += ddelta;
-	}	
+	}
 	gsl_vector_free(xi);
-	return 2*d; 
+	return 2*d;
 }
 
 double calc_pearson_chi2(const gsl_vector* beta, void* params) {
@@ -426,9 +422,9 @@ double calc_pearson_chi2(const gsl_vector* beta, void* params) {
 	double pearson = 0;
 	double beta_xi;
 	double yi = 0;
-	
+
 	gsl_vector* xi = gsl_vector_alloc(p->n);
-	for (int i = 0; i < p->l; i++) {	
+	for (int i = 0; i < p->l; i++) {
 		yi = gsl_vector_get(p->yis, i);
 		gsl_matrix_get_row(xi, p->xis, i);
 		gsl_blas_ddot(beta, xi, &beta_xi);
@@ -437,19 +433,19 @@ double calc_pearson_chi2(const gsl_vector* beta, void* params) {
 		double pdelta = (yi - m_i)*(yi - m_i)/m_i;
 		pearson += pdelta;
 	}
-	return pearson; 
+	return pearson;
 }
 
 void calc_param_wald_chi2(
-				gsl_vector * beta, 
-				gsl_vector * ses, 
-				gsl_vector * waldchi2, 
+				gsl_vector * beta,
+				gsl_vector * ses,
+				gsl_vector * waldchi2,
 				gsl_vector * pchi2
 			) {
 	for (int i = 0; i < beta->size; i++) {
 		double beta_i = gsl_vector_get(beta, i);
 		double se_i = gsl_vector_get(ses, i);
-		double chi_sq = beta_i*beta_i/(se_i*se_i); 
+		double chi_sq = beta_i*beta_i/(se_i*se_i);
 		double chi_p = gsl_cdf_chisq_Q(chi_sq, 1); // 1 dof per parameter
 
 		gsl_vector_set(waldchi2, i, chi_sq);
@@ -457,12 +453,12 @@ void calc_param_wald_chi2(
 	}
 }
 void calc_param_cis(
-				gsl_vector * beta, 
-				gsl_vector * ses, 
-				gsl_vector * ci_l, 
+				gsl_vector * beta,
+				gsl_vector * ses,
+				gsl_vector * ci_l,
 				gsl_vector * ci_u
 			) {
- 
+
 	for (int i = 0; i < beta->size; i++) {
 		double beta_i = gsl_vector_get(beta, i);
 		double se_i = gsl_vector_get(ses, i);
